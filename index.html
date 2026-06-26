@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#e7e1d3">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ブロック崩し">
+<title>つくる手帖 ブロック崩し</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<style>
+:root{--paper:#f6f0df;--ink:#2f2a23;--muted:#766b5c;--line:#d8ceb8;--accent:#8c5b3f;--blue:#5f7f92;--green:#6d8755;--red:#a75f54;--gold:#b89450;}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;overscroll-behavior:none;background:#2b2a26;color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",Meiryo,sans-serif;}
+body{position:fixed;inset:0;height:100vh;height:100svh;height:100dvh;touch-action:none;display:flex;flex-direction:column;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);}
+.app{height:100%;display:flex;flex-direction:column;background:linear-gradient(180deg,#40392f,#25231f);}
+.header{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;color:#f5ecd9;background:rgba(0,0,0,.28);border-bottom:1px solid rgba(255,255,255,.12);}
+.title{font-weight:800;letter-spacing:.04em;font-size:15px;white-space:nowrap}.title small{font-weight:500;opacity:.75;margin-left:.3em}.stats{display:flex;gap:10px;font-size:12px;opacity:.95;white-space:nowrap}.back{color:#f5ecd9;text-decoration:none;font-size:12px;opacity:.85}.back:empty{display:none}
+.stage{position:relative;flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;padding:8px;}
+.boardWrap{position:relative;max-width:100%;max-height:100%;border-radius:18px;box-shadow:0 16px 50px rgba(0,0,0,.42), inset 0 0 0 1px rgba(255,255,255,.25);background:var(--paper);overflow:hidden;}
+canvas{display:block;width:100%;height:100%;touch-action:none;background:var(--paper);}
+.controls{flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(0,0,0,.25);border-top:1px solid rgba(255,255,255,.1);color:#f5ecd9;}
+.hint{min-width:0;flex:1 1 auto;font-size:12px;opacity:.85;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.btn{flex:0 0 auto;border:0;border-radius:999px;padding:10px 14px;background:#e7e1d3;color:#342b22;font-weight:800;box-shadow:0 2px 0 rgba(0,0,0,.25);}.btn:active{transform:translateY(1px)}
+.overlay{position:absolute;inset:0;display:flex;overflow:auto;padding:14px;background:rgba(35,31,26,.35);backdrop-filter:blur(2px);touch-action:manipulation;z-index:5;}
+.panel{margin:auto;width:min(92%,360px);background:rgba(246,240,223,.96);border:1px solid #d5cab3;border-radius:18px;padding:18px;box-shadow:0 18px 45px rgba(0,0,0,.35);text-align:center;}
+.panel h1{font-size:24px;margin:0 0 8px;line-height:1.25}.panel p{font-size:14px;line-height:1.7;color:#5d5347;margin:8px 0 14px}.panel .big{font-size:17px;font-weight:800;color:#3a3027}.panel button{width:100%;font-size:17px;padding:13px 16px;border:0;border-radius:999px;background:#3f6b78;color:#fff;font-weight:900;box-shadow:0 4px 0 #274852}.hide{display:none!important}@media(max-width:430px){.title small{display:none}.stats{font-size:11px;gap:6px}.panel h1{font-size:21px}.panel p{font-size:13px}.controls{padding:7px}.btn{padding:9px 12px}.hint{font-size:11px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="header"><a id="backLink" class="back"></a><div class="title">つくる手帖 <small>ブロック崩し</small></div><div class="stats"><span id="score">0</span><span id="lives">♥♥♥</span><span id="pageNo">1頁</span></div></header>
+  <main id="stage" class="stage"><div id="boardWrap" class="boardWrap"><canvas id="cv" width="420" height="680"></canvas><div id="overlay" class="overlay"><div class="panel"><h1>記録のかけら</h1><p class="big">一玉の行動で、日々の断片をページにする。</p><p>指で左右に動かして、言葉のブロックを崩してください。崩した言葉は下の記録欄にたまります。</p><button id="startBtn">はじめる</button></div></div></div></main>
+  <footer class="controls"><div id="hint" class="hint">指の位置にパドルが動きます</div><button id="pauseBtn" class="btn">一時停止</button><button id="restartBtn" class="btn">再開</button></footer>
+</div>
+<script>
+'use strict';
+const W=420,H=680,cv=document.getElementById('cv'),ctx=cv.getContext('2d'),stage=document.getElementById('stage'),wrap=document.getElementById('boardWrap');
+const overlay=document.getElementById('overlay'),startBtn=document.getElementById('startBtn'),pauseBtn=document.getElementById('pauseBtn'),restartBtn=document.getElementById('restartBtn');
+const scoreEl=document.getElementById('score'),livesEl=document.getElementById('lives'),pageNoEl=document.getElementById('pageNo'),hint=document.getElementById('hint'),backLink=document.getElementById('backLink');
+const standalone=matchMedia('(display-mode: standalone)').matches || navigator.standalone===true;if(!standalone){backLink.textContent='← つくる手帖';backLink.href='../';}
+const coarse=matchMedia('(pointer:coarse)').matches;hint.textContent=coarse?'指の位置にパドルが動きます':'マウス移動 / ← → で操作、Spaceで開始';
+document.addEventListener('gesturestart',e=>e.preventDefault());document.addEventListener('gesturechange',e=>e.preventDefault());document.addEventListener('dblclick',e=>e.preventDefault());
+function fitDPR(){const dpr=Math.min(devicePixelRatio||1,2.5);cv.width=W*dpr;cv.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);}function fitBoard(){const s=stage.getBoundingClientRect(),ratio=W/H;let w=s.width,h=w/ratio;if(h>s.height){h=s.height;w=h*ratio;}wrap.style.width=Math.floor(w)+'px';wrap.style.height=Math.floor(h)+'px';fitDPR();draw();}addEventListener('resize',fitBoard);addEventListener('orientationchange',()=>setTimeout(fitBoard,250));
+const words=['アイデア','記録','旅','温泉','家族','仕事','工夫','失敗','発見','道具','小さな一歩','人生'];const colors=['#d18b74','#c9a45c','#7f9a69','#6e94a8','#ad7565','#8f7b58'];let bricks=[],collected=[];
+let ball,paddle,score,lives,page,running,paused,last,keys={};
+function makeBricks(){bricks=[];const cols=4,bw=86,bh=34,gx=10,gy=10,ox=24,oy=70;for(let r=0;r<3;r++)for(let c=0;c<cols;c++){const i=r*cols+c;bricks.push({x:ox+c*(bw+gx),y:oy+r*(bh+gy),w:bw,h:bh,word:words[i],alive:true,color:colors[i%colors.length]});}}
+function reset(all=true){if(all){score=0;lives=3;page=1;collected=[];makeBricks();}ball={x:W/2,y:H-122,r:8,vx:150*(Math.random()<.5?-1:1),vy:-240,stuck:true};paddle={x:W/2-48,y:H-92,w:96,h:14,target:W/2};running=false;paused=false;updateUI();draw();}
+function updateUI(){scoreEl.textContent=score+'点';livesEl.textContent='♥'.repeat(Math.max(0,lives));pageNoEl.textContent=page+'頁';}
+function launch(){if(ball.stuck){ball.stuck=false;running=true;paused=false;last=performance.now();requestAnimationFrame(loop);}}
+function nextPage(){page++;collected=[];makeBricks();reset(false);overlay.innerHTML='<div class="panel"><h1>今日の1ページ完成</h1><p class="big">崩した言葉が、記録になりました。</p><p>次のページへ進みます。</p><button id="nextBtn">次のページ</button></div>';overlay.classList.remove('hide');document.getElementById('nextBtn').onclick=()=>{overlay.classList.add('hide');launch();};updateUI();}
+function gameOver(){running=false;overlay.innerHTML='<div class="panel"><h1>記録は続きます</h1><p class="big">今回の記録：'+score+'点</p><p>うまく残せなかった日も、ちゃんと次のページにつながります。</p><button id="againBtn">もう一度</button></div>';overlay.classList.remove('hide');document.getElementById('againBtn').onclick=()=>{overlay.classList.add('hide');reset(true);launch();};}
+function rectHit(b){return ball.x+ball.r>b.x&&ball.x-ball.r<b.x+b.w&&ball.y+ball.r>b.y&&ball.y-ball.r<b.y+b.h;}
+function step(dt){if(paused)return;let tx=paddle.target-paddle.w/2;paddle.x+=(tx-paddle.x)*Math.min(1,dt*18);paddle.x=Math.max(14,Math.min(W-paddle.w-14,paddle.x));if(keys.ArrowLeft)paddle.target-=300*dt;if(keys.ArrowRight)paddle.target+=300*dt;paddle.target=Math.max(paddle.w/2+14,Math.min(W-paddle.w/2-14,paddle.target));if(ball.stuck){ball.x=paddle.x+paddle.w/2;ball.y=paddle.y-10;return;}let maxv=420;ball.vx=Math.max(-maxv,Math.min(maxv,ball.vx));ball.vy=Math.max(-maxv,Math.min(maxv,ball.vy));ball.x+=ball.vx*dt;ball.y+=ball.vy*dt;if(ball.x<18+ball.r){ball.x=18+ball.r;ball.vx=Math.abs(ball.vx);}if(ball.x>W-18-ball.r){ball.x=W-18-ball.r;ball.vx=-Math.abs(ball.vx);}if(ball.y<26+ball.r){ball.y=26+ball.r;ball.vy=Math.abs(ball.vy);}if(ball.y>H+30){lives--;updateUI();if(lives<=0)gameOver();else reset(false);}
+ const p={x:paddle.x,y:paddle.y,w:paddle.w,h:paddle.h};if(rectHit(p)&&ball.vy>0){ball.y=p.y-ball.r;let hit=(ball.x-(p.x+p.w/2))/(p.w/2);ball.vx=hit*260;ball.vy=-Math.sqrt(Math.max(42000,240*240-ball.vx*ball.vx/3));}
+ for(const br of bricks){if(!br.alive||!rectHit(br))continue;br.alive=false;score+=10;collected.push(br.word);ball.vy*=-1.03;ball.vx+=(Math.random()-.5)*30;updateUI();break;}if(bricks.every(b=>!b.alive))nextPage();}
+function loop(now){if(!running)return;let dt=(now-last)/1000;last=now;if(dt>.05)dt=.05;for(let i=0;i<6;i++)step(dt/6);draw();if(running&&!paused)requestAnimationFrame(loop);}
+function roundRect(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+function draw(){ctx.clearRect(0,0,W,H);ctx.fillStyle='#f6f0df';ctx.fillRect(0,0,W,H);ctx.strokeStyle='rgba(160,140,105,.25)';ctx.lineWidth=1;for(let y=28;y<H;y+=24){ctx.beginPath();ctx.moveTo(18,y);ctx.lineTo(W-18,y);ctx.stroke();}for(let x=28;x<W;x+=24){ctx.beginPath();ctx.moveTo(x,30);ctx.lineTo(x,H-22);ctx.stroke();}ctx.strokeStyle='#b8a98c';ctx.lineWidth=3;roundRect(15,25,W-30,H-50,16);ctx.stroke();ctx.fillStyle='#4d4035';ctx.font='bold 20px sans-serif';ctx.textAlign='center';ctx.fillText('記録のかけらをほどく',W/2,50);
+ for(const br of bricks){if(!br.alive)continue;ctx.fillStyle=br.color;roundRect(br.x,br.y,br.w,br.h,8);ctx.fill();ctx.fillStyle='rgba(255,255,255,.22)';ctx.fillRect(br.x+6,br.y+5,br.w-12,2);ctx.fillStyle='#fff8ec';ctx.font='bold 14px sans-serif';ctx.fillText(br.word,br.x+br.w/2,br.y+22);}ctx.fillStyle='rgba(120,95,70,.12)';roundRect(28,H-56,W-56,32,10);ctx.fill();ctx.fillStyle='#6b5b4b';ctx.font='12px sans-serif';ctx.textAlign='left';ctx.fillText('今日のページ： '+(collected.length?collected.join(' ・ '):'まだ白紙です'),38,H-36);
+ ctx.fillStyle='#6e4c3a';roundRect(paddle.x,paddle.y,paddle.w,paddle.h,7);ctx.fill();ctx.fillStyle='rgba(255,255,255,.25)';ctx.fillRect(paddle.x+8,paddle.y+3,paddle.w-16,2);ctx.beginPath();ctx.arc(ball.x,ball.y,ball.r,0,Math.PI*2);ctx.fillStyle='#2f6f7c';ctx.fill();ctx.strokeStyle='rgba(255,255,255,.45)';ctx.lineWidth=2;ctx.stroke();if(ball.stuck){ctx.fillStyle='#7a6b5b';ctx.font='13px sans-serif';ctx.textAlign='center';ctx.fillText('タップして開始',W/2,H-130);}}
+function posToTarget(e){const r=cv.getBoundingClientRect();let clientX=e.clientX;if(e.touches&&e.touches[0])clientX=e.touches[0].clientX;const x=(clientX-r.left)/r.width*W;paddle.target=Math.max(paddle.w/2+14,Math.min(W-paddle.w/2-14,x));}
+['touchstart','touchmove'].forEach(type=>cv.addEventListener(type,e=>{e.preventDefault();posToTarget(e);if(type==='touchstart'){overlay.classList.add('hide');launch();}}, {passive:false}));
+cv.addEventListener('pointerdown',e=>{e.preventDefault();posToTarget(e);overlay.classList.add('hide');launch();});cv.addEventListener('pointermove',e=>{e.preventDefault();posToTarget(e);});
+document.addEventListener('keydown',e=>{keys[e.key]=true;if(e.code==='Space'){overlay.classList.add('hide');launch();}});document.addEventListener('keyup',e=>{keys[e.key]=false;});
+startBtn.onclick=()=>{overlay.classList.add('hide');launch();};pauseBtn.onclick=()=>{paused=true;running=false;draw();};restartBtn.onclick=()=>{if(!running){paused=false;running=true;last=performance.now();requestAnimationFrame(loop);}};
+if('serviceWorker'in navigator)addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+reset(true);fitBoard();
+</script>
+</body>
+</html>
